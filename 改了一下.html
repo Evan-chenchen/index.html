@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>出國購物管家 Pro</title>
+    <style>
+        :root { --main-color: #0984e3; --wish-color: #fab1a0; --bought-color: #00b894; }
+        body { font-family: -apple-system, sans-serif; background: #f1f2f6; margin: 0; padding: 12px; padding-bottom: 240px; transition: 0.3s; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .theme-picker { display: flex; align-items: center; background: white; padding: 5px 10px; border-radius: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 12px; }
+        .tab-group { display: flex; gap: 8px; margin-bottom: 12px; }
+        .tab { background: #eee; border: none; padding: 8px 15px; border-radius: 20px; font-size: 14px; flex: 1; outline: none; }
+        .tab.active { background: var(--main-color); color: white; transition: 0.3s; }
+        
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; margin-bottom: 10px; -webkit-appearance: none; }
+        
+        /* 按鈕群組 */
+        .btn-group { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 8px; }
+        .btn-wish { background: var(--wish-color); color: #d63031; border: none; border-radius: 8px; padding: 12px; font-weight: bold; }
+        .btn-bought { background: var(--bought-color); color: white; border: none; border-radius: 8px; padding: 12px; font-weight: bold; }
+        .btn-clear { background: #eee; color: #666; border: none; border-radius: 8px; padding: 12px; font-weight: bold; }
+        
+        .section-title { font-size: 14px; font-weight: bold; color: #636e72; margin: 15px 0 8px 5px; display: flex; justify-content: space-between; }
+        
+        /* 商品項目樣式 */
+        .item { display: flex; align-items: center; padding: 12px; background: white; border-radius: 10px; margin-bottom: 8px; border-left: 5px solid #ddd; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .item.checked { border-left-color: var(--bought-color); background: #f0fff4; }
+        
+        .custom-check { width: 24px; height: 24px; border: 2px solid #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: white; }
+        .checked .custom-check { background: var(--bought-color); border-color: var(--bought-color); }
+        .custom-check svg { width: 16px; height: 16px; fill: white; display: none; }
+        .checked .custom-check svg { display: block; }
+        
+        .price-tag { text-align: right; }
+        .price-foreign { font-size: 12px; color: #999; }
+        .price-twd { font-size: 16px; font-weight: bold; color: #2d3436; }
+        .checked .price-twd { color: #d63031; }
+
+        .fixed-bottom { position: fixed; bottom: 0; left: 0; right: 0; background: white; box-shadow: 0 -2px 15px rgba(0,0,0,0.1); padding: 15px; border-radius: 20px 20px 0 0; }
+        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .summary-box { padding: 10px; border-radius: 10px; text-align: center; }
+        .box-wish { background: #fff5f5; color: #e66767; }
+        .box-bought { background: #f0fff4; color: #20bf6b; }
+        .summary-val { font-size: 18px; font-weight: 900; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div id="lastUpdate" style="font-size: 11px; color: #999;">更新匯率中...</div>
+        <div class="theme-picker">🎨 <input type="color" id="themeColor" value="#0984e3" oninput="changeTheme(this.value)" style="width:20px; height:20px; border:none; background:none;"></div>
+    </div>
+
+    <div class="card">
+        <div class="tab-group">
+            <button class="tab active" onclick="updateCurrency('JPY', this)">日幣</button>
+            <button class="tab" onclick="updateCurrency('KRW', this)">韓元</button>
+            <button class="tab" onclick="updateCurrency('USD', this)">美金</button>
+        </div>
+        <input type="number" id="rate" value="0.21" step="0.0001" oninput="render()">
+    </div>
+
+    <div class="card">
+        <input type="text" id="name" placeholder="商品名稱">
+        <input type="number" id="price" placeholder="外幣金額">
+        <div class="btn-group">
+            <button class="btn-wish" onclick="addItem(false)">＋ 願望</button>
+            <button class="btn-bought" onclick="addItem(true)">✅ 購買</button>
+            <button class="btn-clear" onclick="clearAll()">🗑️</button>
+        </div>
+    </div>
+
+    <div class="section-title"><span>📝 願望清單 (未購)</span><span id="wishSumText"></span></div>
+    <div id="wishList"></div>
+
+    <div class="section-title"><span>🛒 戰利品 (已購)</span><span id="boughtSumText"></span></div>
+    <div id="boughtList"></div>
+
+    <div class="fixed-bottom">
+        <div style="display: flex; align-items: center; background: #f8f9fa; padding: 8px; border-radius: 8px; margin-bottom: 10px;">
+            <input type="number" id="quickPrice" placeholder="快速算台幣" oninput="quickCalc(this.value)" style="margin:0; border:none; background:none;">
+            <span style="font-weight: bold; color: var(--main-color); margin-left:10px;">≈ NT$ <span id="quickResult">0</span></span>
+        </div>
+        <div class="summary-grid">
+            <div class="summary-box box-wish">預算合計<br><span class="summary-val" id="totalWish">$ 0</span></div>
+            <div class="summary-box box-bought">實支合計<br><span class="summary-val" id="totalBought">$ 0</span></div>
+        </div>
+    </div>
+
+    <script>
+        let items = JSON.parse(localStorage.getItem('myTravelList')) || [];
+        let savedRates = { JPY: 0.21, KRW: 0.024, USD: 32.5 };
+        let currentCurrency = 'JPY';
+
+        async function fetchRate(currency) {
+            try {
+                const res = await fetch(`https://open.er-api.com/v6/latest/TWD`);
+                const data = await res.json();
+                const rate = 1 / data.rates[currency];
+                document.getElementById('lastUpdate').innerText = `即時匯率: 1:${rate.toFixed(4)}`;
+                return rate;
+            } catch (e) {
+                document.getElementById('lastUpdate').innerText = `離線匯率模式`;
+                return savedRates[currency];
+            }
+        }
+
+        async function updateCurrency(code, btn) {
+            currentCurrency = code;
+            document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+            btn.classList.add('active');
+            const r = await fetchRate(code);
+            document.getElementById('rate').value = r.toFixed(4);
+            render();
+        }
+
+        function changeTheme(color) {
+            document.documentElement.style.setProperty('--main-color', color);
+            localStorage.setItem('themeColor', color);
+        }
+
+        function quickCalc(val) {
+            const r = document.getElementById('rate').value;
+            document.getElementById('quickResult').innerText = Math.round(val * r).toLocaleString();
+        }
+
+        function addItem(isBought) {
+            const n = document.getElementById('name').value || "未命名商品";
+            const p = parseFloat(document.getElementById('price').value) || 0;
+            items.push({n, p, c: isBought}); 
+            document.getElementById('name').value = '';
+            document.getElementById('price').value = '';
+            render();
+        }
+
+        function clearAll() {
+            if(confirm('確定要清空所有清單嗎？')) { items = []; render(); }
+        }
+
+        function render() {
+            const r = document.getElementById('rate').value;
+            const wishList = document.getElementById('wishList');
+            const boughtList = document.getElementById('boughtList');
+            wishList.innerHTML = ""; boughtList.innerHTML = "";
+            let sumWish = 0, sumBought = 0;
+
+            items.forEach((item, i) => {
+                const twd = Math.round(item.p * r);
+                const html = `
+                <div class="item ${item.c ? 'checked' : ''}" onclick="toggleItem(${i})">
+                    <div class="custom-check">
+                        <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                    </div>
+                    <div style="flex:1; margin-left:12px;">
+                        <b>${item.n}</b>
+                    </div>
+                    <div class="price-tag">
+                        <div class="price-foreign">${currentCurrency} ${item.p.toLocaleString()}</div>
+                        <div class="price-twd">NT$ ${twd.toLocaleString()}</div>
+                    </div>
+                    <div onclick="event.stopPropagation(); items.splice(${i},1); render();" style="margin-left:15px; color:#ddd; font-size:20px;">✕</div>
+                </div>`;
+                
+                if(item.c) { boughtList.innerHTML += html; sumBought += twd; }
+                else { wishList.innerHTML += html; sumWish += twd; }
+            });
+
+            document.getElementById('totalWish').innerText = `$ ${sumWish.toLocaleString()}`;
+            document.getElementById('totalBought').innerText = `$ ${sumBought.toLocaleString()}`;
+            localStorage.setItem('myTravelList', JSON.stringify(items));
+        }
+
+        function toggleItem(index) { items[index].c = !items[index].c; render(); }
+
+        const savedColor = localStorage.getItem('themeColor');
+        if(savedColor) { changeTheme(savedColor); document.getElementById('themeColor').value = savedColor; }
+        updateCurrency('JPY', document.querySelector('.tab'));
+    </script>
+</body>
+</html>
+
